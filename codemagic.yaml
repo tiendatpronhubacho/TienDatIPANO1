@@ -9,16 +9,18 @@ workflows:
           brew install xtool-org/tap/xtool
       - name: Build IPA
         script: |
+          date +%s > .tiendat-build-start
           xtool dev build --ipa
+      - name: Compile assets and normalize IPA resources
+        script: |
+          chmod +x Scripts/find-new-ipa.sh Scripts/fix-ipa-resources.sh
+          IPA_PATH="$(Scripts/find-new-ipa.sh .tiendat-build-start)"
+          Scripts/fix-ipa-resources.sh "$IPA_PATH"
       - name: Verify IPA artifact
         script: |
-          IPA_PATH="$(find . -type f -name '*.ipa' -print -quit)"
-          if [ -z "$IPA_PATH" ]; then
-            echo "ERROR: No IPA was produced by xtool."
-            exit 1
-          fi
-          echo "IPA produced: $IPA_PATH"
-          unzip -t "$IPA_PATH"
+          IPA_PATH="$(Scripts/find-new-ipa.sh .tiendat-build-start)"
+          /usr/bin/unzip -t "$IPA_PATH"
+          echo "Verified unsigned IPA: $IPA_PATH"
     artifacts:
       - "**/*.ipa"
       - .build/release/**
