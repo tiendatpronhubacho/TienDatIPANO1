@@ -83,7 +83,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		3105A010 /* OGIOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "OGIOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		3105A010 /* TienDat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "TienDat.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3105A020 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
 		3105A021 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		3105A023 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -207,7 +207,7 @@
 		3105A402 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				3105A010 /* OGIOS.app */,
+				3105A010 /* TienDat.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -293,7 +293,7 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		3105A500 /* OGIOS */ = {
+		3105A500 /* TienDat */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 3105A600;
 			buildPhases = (
@@ -305,8 +305,8 @@
 			);
 			dependencies = (
 			);
-			name = OGIOS;
-			productName = OGIOS;
+			name = TienDat;
+			productName = TienDat;
 			productReference = 3105A010;
 			productType = "com.apple.product-type.application";
 		};
@@ -465,7 +465,7 @@
 				MARKETING_VERSION = 1.1.1;
 				OTHER_LDFLAGS = "-lz";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.tiendat.ogios";
-				PRODUCT_NAME = OGIOS;
+				PRODUCT_NAME = TienDat;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "ThreeOneOSFive/ThreeOneOSFive-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
@@ -499,7 +499,7 @@
 				MARKETING_VERSION = 1.1.1;
 				OTHER_LDFLAGS = "-lz";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.tiendat.ogios";
-				PRODUCT_NAME = OGIOS;
+				PRODUCT_NAME = TienDat;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "ThreeOneOSFive/ThreeOneOSFive-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
@@ -627,7 +627,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		3105A600 /* Build configuration list for PBXNativeTarget "OGIOS" */ = {
+		3105A600 /* Build configuration list for PBXNativeTarget "TienDat" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				3105A601 /* Debug */,

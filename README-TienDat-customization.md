@@ -38,3 +38,9 @@ Removed old bundled files:
 - `Resources/Patches/OGIOS File (9).3105`
 - `Resources/Patches/OGIOS File (4).3105`
 - `Resources/Patches/OGIOS File (1).3105`
+
+
+## Executable product rename
+- Renamed the Xcode target/product and shared scheme from `OGIOS` to `TienDat`.
+- The built application bundle is now `TienDat.app`, with executable product name `TienDat`.
+- Kept the Bundle Identifier `com.tiendat.ogios` unchanged.
