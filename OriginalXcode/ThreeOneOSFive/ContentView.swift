@@ -28,8 +28,8 @@ struct ContentView: View {
                     brandHeader
                     devicePanel
                     patchOptions
+                    patchStatusPanel
                     gameLaunchPanel
-                    footerStatus
                 }
                 .padding(.horizontal, 18)
                 .padding(.top, 18)
@@ -101,28 +101,33 @@ struct ContentView: View {
             HStack {
                 panelTitle("PATCH OPTIONS", icon: "bolt.fill")
                 Spacer()
-                Text("PATCH FILES REQUIRED")
+                Text("SELECT TO ENABLE")
                     .font(.system(size: 9, weight: .bold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.45))
             }
 
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                PatchPlaceholderCard(name: "Nhẹ Tâm Log 40", target: "FREE FIRE VN", color: AppTheme.accent)
-                PatchPlaceholderCard(name: "Aim Body", target: "FREE FIRE VN", color: AppTheme.secondaryAccent)
+                patchCard(name: "Aim Drag", target: "FREE FIRE • NORMAL", package: "Aim Drag.3105", color: AppTheme.accent, state: $aimDragEnabled)
+                patchCard(name: "Aim Body", target: "FREE FIRE • NORMAL", package: "Aim Body.3105", color: AppTheme.accent, state: $aimBodyPackageEnabled)
             }
 
-            HStack(spacing: 8) {
-                Circle().fill(AppTheme.accent).frame(width: 7, height: 7)
-                Text("WAITING — ADD THE TWO PATCH FILES")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.72))
-                    .lineLimit(2)
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(Color.black.opacity(0.34), in: Capsule())
         }
+    }
+
+    private var patchStatusPanel: some View {
+        HStack(spacing: 9) {
+            Circle()
+                .fill(patchMessage.hasPrefix("ERROR") || patchMessage.hasPrefix("FAILED") ? AppTheme.accent : .green)
+                .frame(width: 8, height: 8)
+            Text(patchMessage)
+                .font(.system(size: 10, weight: .black, design: .rounded))
+                .tracking(0.7)
+                .foregroundStyle(.white.opacity(0.72))
+                .lineLimit(2)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
     }
 
     private func patchCard(name: String, target: String, package: String, color: Color, state: Binding<Bool>) -> some View {
@@ -133,23 +138,8 @@ struct ContentView: View {
 
     private var gameLaunchPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
-            panelTitle("LAUNCH GAME", icon: "arrow.up.forward.app.fill")
-            HStack(spacing: 12) {
-                launchButton(title: "FREE FIRE VN", subtitle: "Free Fire Vietnam", color: AppTheme.accent, scheme: "https://apps.apple.com/vn/search?term=Free%20Fire%20VN")
-                lockedLaunchButton(title: "FF MAX", subtitle: "Locked • Coming Soon", color: AppTheme.secondaryAccent)
-            }
-            Button {
-                showCleaner = true
-            } label: {
-                Label("Clean Cache & Temp", systemImage: "trash.slash.fill")
-                    .font(.system(size: 13, weight: .black, design: .rounded))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity, minHeight: 52)
-                    .background(Color.black.opacity(0.40), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(AppTheme.accent.opacity(0.52), lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Open cache and temporary files cleaner")
+            panelTitle("FREE FIRE VN MỚI UPDATE", icon: "arrow.up.forward.app.fill")
+            launchButton(title: "FREE FIRE VN MỚI UPDATE", subtitle: "Free Fire Việt Nam", color: AppTheme.accent, scheme: "freefireth")
         }
     }
 
@@ -202,7 +192,7 @@ struct ContentView: View {
                 .tracking(1.2)
                 .foregroundStyle(.white.opacity(0.72))
             Spacer()
-            Text("TIENDAT • READY")
+            Text("OGIOS • PRONTO")
                 .font(.system(size: 9, weight: .bold, design: .rounded))
                 .foregroundStyle(AppTheme.accent.opacity(0.8))
         }
@@ -210,6 +200,42 @@ struct ContentView: View {
         .padding(.vertical, 13)
         .background(Color.black.opacity(0.45), in: Capsule())
         .overlay(Capsule().stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
+    }
+
+    private var developerCredits: some View {
+        VStack(spacing: 10) {
+            Text("Developed by OGIOS")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.72))
+                .multilineTextAlignment(.center)
+
+            Text("Our Telegram channels")
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundStyle(AppTheme.secondaryAccent.opacity(0.85))
+
+            HStack(spacing: 10) {
+                channelButton(title: "OGIOS Telegram", url: "https://t.me/ogios1")
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 4)
+        .padding(.bottom, 8)
+    }
+
+    private func channelButton(title: String, url: String) -> some View {
+        Button {
+            guard let destination = URL(string: url) else { return }
+            UIApplication.shared.open(destination)
+        } label: {
+            Label(title, systemImage: "paperplane.fill")
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+                .background(AppTheme.accent.opacity(0.18), in: Capsule())
+                .overlay(Capsule().stroke(AppTheme.accent.opacity(0.42), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
 
     private func panelTitle(_ title: String, icon: String) -> some View {
@@ -230,13 +256,8 @@ struct ContentView: View {
     }
 
     private func syncPatchStates() {
-        aimDragEnabled = isPatchActive("OGIOS File (6).3105")
-        aimNeckEnabled = isPatchActive("OGIOS File (7).3105")
-        hspeitoffEnabled = isPatchActive("OGIOS File (8).3105")
-        hyperBalamagicaEnabled = isPatchActive("OGIOS File (10).3105")
-        aimBodyPackageEnabled = isPatchActive("OGIOS File (12).3105")
-        aimChestPackageEnabled = isPatchActive("OGIOS File (2).3105")
-        magicEnabled = isPatchActive("OGIOS File (14).3105")
+        aimDragEnabled = isPatchActive("Aim Drag.3105")
+        aimBodyPackageEnabled = isPatchActive("Aim Body.3105")
     }
 
     private func isPatchActive(_ packageFilename: String) -> Bool {
@@ -252,13 +273,8 @@ struct ContentView: View {
 
     private func setPatchState(for packageFilename: String, enabled: Bool) {
         switch packageFilename {
-        case "OGIOS File (6).3105": aimDragEnabled = enabled
-        case "OGIOS File (7).3105": aimNeckEnabled = enabled
-        case "OGIOS File (8).3105": hspeitoffEnabled = enabled
-        case "OGIOS File (10).3105": hyperBalamagicaEnabled = enabled
-        case "OGIOS File (12).3105": aimBodyPackageEnabled = enabled
-        case "OGIOS File (2).3105": aimChestPackageEnabled = enabled
-        case "OGIOS File (14).3105": magicEnabled = enabled
+        case "Aim Drag.3105": aimDragEnabled = enabled
+        case "Aim Body.3105": aimBodyPackageEnabled = enabled
         default: break
         }
     }
@@ -328,51 +344,10 @@ struct ContentView: View {
     }
 
     private func openGame(scheme: String) {
-        // Until the official Free Fire VN app URL scheme is verified, open its App Store search page.
-        guard let url = URL(string: scheme) else { return }
+        guard let url = URL(string: "\(scheme)://") else { return }
         UIApplication.shared.open(url, options: [:]) { success in
-            log("launch URL: \(scheme) success=\(success)")
+            log("launch: \(scheme) success=\(success)")
         }
-    }
-}
-
-private struct PatchPlaceholderCard: View {
-    let name: String
-    let target: String
-    let color: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 11) {
-            HStack {
-                Image(systemName: "bolt.fill")
-                    .font(.system(size: 16, weight: .black))
-                    .foregroundStyle(color)
-                Spacer()
-                Text("WAITING")
-                    .font(.system(size: 10, weight: .black, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.5))
-            }
-            Text(name)
-                .font(.system(size: 17, weight: .black, design: .rounded))
-                .foregroundStyle(.white)
-                .lineLimit(2)
-                .minimumScaleFactor(0.78)
-            Text(target)
-                .font(.system(size: 10, weight: .black, design: .rounded))
-                .tracking(1.3)
-                .foregroundStyle(color)
-            HStack(spacing: 7) {
-                Circle().fill(Color.white.opacity(0.25)).frame(width: 8, height: 8)
-                Text("PATCH FILE NOT ADDED")
-                    .font(.system(size: 9, weight: .black, design: .rounded))
-                    .tracking(0.6)
-                    .foregroundStyle(.white.opacity(0.65))
-            }
-        }
-        .frame(maxWidth: .infinity, minHeight: 142, alignment: .leading)
-        .padding(14)
-        .background(Color.black.opacity(0.52), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(color.opacity(0.28), lineWidth: 1))
     }
 }
 
