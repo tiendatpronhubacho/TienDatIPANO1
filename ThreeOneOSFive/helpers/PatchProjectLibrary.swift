@@ -54,40 +54,40 @@ enum PatchProjectLibrary {
         return root
     }
 
-    // 👇 THÊM HÀM NÀY VÀO
-        static func bootstrap(fileManager: FileManager = .default) {
-        // Đường dẫn tuyệt đối trên server build (nơi chứa thư mục ThreeOneOSFive)
-        let sourcePath = "/Users/builder/clone/ThreeOneOSFive"
-        let sourceURL = URL(fileURLWithPath: sourcePath)
-        
-        guard let files = try? fileManager.contentsOfDirectory(at: sourceURL, includingPropertiesForKeys: nil, options: .skipsHiddenFiles) else {
-            log("patch: bootstrap failed -- cannot read \(sourcePath)")
+    /// Copies bundled patch packages into Application Support. Never refers to
+    /// the CI machine's absolute checkout path (which does not exist on iPhone).
+    static func bootstrap(fileManager: FileManager = .default) {
+        guard let root = try? packageRootURL(fileManager: fileManager) else {
+            log("patch: bootstrap failed -- Application Support unavailable")
             return
         }
-        
-        // Lọc ra các file có đuôi .3105 hoặc .3106
-        let patches = files.filter { ["3105", "3106"].contains($0.pathExtension.lowercased()) }
-        
-        guard !patches.isEmpty else {
-            log("patch: bootstrap skipped -- no .3105 files found in \(sourcePath)")
-            return
-        }
-
-        guard let root = try? packageRootURL(fileManager: fileManager) else { return }
-        
-        // Copy từng file vào thư mục Application Support/PatchProjects của app
-        for source in patches {
-            let destination = root.appendingPathComponent(source.lastPathComponent)
-            if !fileManager.fileExists(atPath: destination.path) {
+        let bundleFolders = [
+            Bundle.main.resourceURL?.appendingPathComponent("Patches", isDirectory: true),
+            Bundle.main.bundleURL.appendingPathComponent("Patches", isDirectory: true)
+        ].compactMap { $0 }
+        var copied = 0
+        for folder in bundleFolders {
+            guard let files = try? fileManager.contentsOfDirectory(
+                at: folder, includingPropertiesForKeys: [.isRegularFileKey],
+                options: [.skipsHiddenFiles]
+            ) else { continue }
+            for source in files where ["3105", "3106"].contains(source.pathExtension.lowercased()) {
+                let destination = root.appendingPathComponent(source.lastPathComponent)
+                guard !fileManager.fileExists(atPath: destination.path) else { continue }
                 do {
-                    try fileManager.copyItem(at: source, to: destination)
-                    log("patch: bootstrapped \(source.lastPathComponent)")
+                    let data = try Data(contentsOf: source)
+                    _ = try PatchPackageCodec.inspect(data)
+                    try data.write(to: destination, options: .atomic)
+                    copied += 1
+                    log("patch: bundled package installed -- \(source.lastPathComponent)")
                 } catch {
-                    log("patch: bootstrap failed for \(source.lastPathComponent): \(error)")
+                    log("patch: bundled package rejected -- \(source.lastPathComponent): \(error)")
                 }
             }
         }
+        log("patch: bundle bootstrap finished -- \(copied) package(s) copied")
     }
+
     static func backupRootURL(fileManager: FileManager = .default) throws -> URL {
         let root = try packageRootURL(fileManager: fileManager)
             .appendingPathComponent("Backups", isDirectory: true)

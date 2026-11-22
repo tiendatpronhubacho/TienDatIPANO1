@@ -84,7 +84,7 @@ enum SandboxDiagnostics {
     /// result, LS layout hit, and the recent grant ring.
     static func exportText(probeResult: Bool? = nil, lsLayoutHit: String? = nil) -> String {
         var lines: [String] = []
-        lines.append("3106 Sandbox Diagnostics")
+        lines.append("TienDat Sandbox Diagnostics")
         lines.append("iOS \(AppInfo.osVersion) (\(AppInfo.osBuild)) — \(AppInfo.machineName)")
         lines.append("App: \(AppInfo.appVersion) — Generated: \(Date())")
         lines.append("Backend: \(SandboxAccess.backend.displayName)")

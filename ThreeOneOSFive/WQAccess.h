@@ -21,6 +21,9 @@ NSString *_Nullable wq_app_group(void);
 // Cấp quyền sandbox cho một đường dẫn (worse_query)
 BOOL wq_grant(NSString *path);
 
+// Requests and verifies a write-capable extension (creates and removes a probe file).
+BOOL wq_grant_writable(NSString *path);
+
 // Liệt kê thư mục
 NSArray<NSString *> *_Nullable wq_list(NSString *dir, NSString *_Nullable *_Nullable errorText);
 

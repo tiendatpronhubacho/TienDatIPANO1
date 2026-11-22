@@ -27,15 +27,20 @@ enum SandboxAccess {
     static var backend: SandboxBackend {
         let v = AppInfo.versionTuple
         if ExploitSupportPolicy.supportsKernelExploit(
-            major: v.major, minor: v.minor, patch: v.patch, isA10: AppInfo.isA10
+            major: v.major,
+            minor: v.minor,
+            patch: v.patch,
+            isA10: AppInfo.isA10
         ) {
             return .kernel
         }
+        if ExploitSupportPolicy.supportsWorseQuery(
+            major: v.major, minor: v.minor, patch: v.patch, build: AppInfo.osBuild
+        ) {
+            return .worseQuery
+        }
         if ExploitSupportPolicy.supportsBadQuery(major: v.major, minor: v.minor, patch: v.patch) {
             return .badQuery
-        }
-        if ExploitSupportPolicy.supportsWorseQuery(major: v.major, minor: v.minor, patch: v.patch) {
-            return .worseQuery
         }
         return .unsupported
     }

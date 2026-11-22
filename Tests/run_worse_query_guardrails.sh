@@ -36,4 +36,18 @@ grep -q 'TienDat.entitlements' "$PROJECT" || fail 'target entitlements are not c
 grep -q 'com.apple.security.application-groups' "$SRC/TienDat.entitlements" || fail 'App Groups entitlement key missing'
 pass 'retry and Xcode project wiring'
 
+# The app-facing WQFiles shim must use the same hardened worse_query backend.
+WQ_IMPL="$SRC/helpers/WQCombined.m"
+WQ_HEADER="$SRC/WQAccess.h"
+grep -q 'worse_query_grant(path.fileSystemRepresentation)' "$WQ_IMPL" || fail 'WQFiles grant shim is not routed through worse_query'
+grep -q 'worse_query_grant_ex(path.fileSystemRepresentation, 1)' "$WQ_IMPL" || fail 'writable grant shim is missing'
+grep -q 'WQOpenDirectoryNoLinks(dir)' "$WQ_IMPL" || fail 'directory listing is not symlink-safe'
+grep -q 'WQOpenRegularAt(parent, leaf.fileSystemRepresentation' "$WQ_IMPL" || fail 'file reads are not restricted to verified regular files'
+grep -q 'fgetxattr(fd' "$WQ_IMPL" || fail 'container metadata is not read from a verified descriptor'
+grep -q 'wq_grant_writable(NSString \*path)' "$WQ_HEADER" || fail 'writable grant API is not exposed'
+if grep -q 'container_query_create' "$WQ_IMPL"; then
+  fail 'duplicate private container-query implementation remains in WQCombined.m'
+fi
+pass 'WQFiles shim shares worse_query tokens and descriptor-safe reads'
+
 echo 'PASS: all worse_query integration guardrails'

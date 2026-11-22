@@ -24,6 +24,7 @@ struct PatchStoreAlert: Identifiable {
 final class PatchProjectStore: ObservableObject {
     @Published private(set) var items: [PatchLibraryItem] = []
     @Published private(set) var isBusy = false
+    @Published private(set) var loadIssues: [String] = []
     @Published var passwordRequest: PatchPasswordRequest?
     @Published var alert: PatchStoreAlert?
     @Published var unlockErrorKey: String?
@@ -49,50 +50,82 @@ final class PatchProjectStore: ObservableObject {
         if let saved = UserDefaults.standard.array(forKey: "com.tiendat.develop.activePatchIDs") as? [String] {
             self.activePatchIDs = Set(saved.compactMap { UUID(uuidString: $0) })
         }
-        
         isBusy = true
         PatchProjectLibrary.bootstrap()
-        
-        Task {      
+        Task { @MainActor in
             await downloadPatchesFromGithub()
             self.items = PatchProjectLibrary.load()
+            self.updateLoadIssues()
             self.isBusy = false
         }
     }
-    
-    private func downloadPatchesFromGithub() async {
-        let fm = FileManager.default
-        guard let rootURL = try? PatchProjectLibrary.packageRootURL() else { return }
-        
-        let baseURL = "https://github.com/tiendatpronhubacho/VipProIPA/raw/refs/heads/main/Patches/"
-        
-        let filenames = [
+
+    private var remotePackageNames: [String] {
+        [
             "Aim Drag.3105", "Aim Neck.3105", "Aim Body.3105",
             "Nhe Tam.3105", "Aim Chest.3105", "Aim R8.3105",
             "Aim Magic.3105", "Neck Anten.3105", "Nhe Anten.3105",
             "Mod Sonic Dimitri.3105", "Mod Thỏ Dimitri.3105", "Mod Roblox Dimitri.3105",
             "Mod Báo Hồng Dimitri.3105", "Mod Baki Alock.3105"
         ]
-        
-        for filename in filenames {
-            let dest = rootURL.appendingPathComponent(filename)
-            if !fm.fileExists(atPath: dest.path) {
-                let encodedName = filename.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? filename
-                if let url = URL(string: baseURL + encodedName) {
-                    do {
-                        let (data, _) = try await URLSession.shared.data(from: url)
-                        try data.write(to: dest)
-                        log("patch: downloaded \(filename)")
-                    } catch {
-                        log("patch: failed to download \(filename) - \(error)")
-                    }
+    }
+
+    private func downloadPatchesFromGithub() async {
+        let fm = FileManager.default
+        guard let rootURL = try? PatchProjectLibrary.packageRootURL() else {
+            loadIssues = ["Không tạo được thư mục Application Support/PatchProjects"]
+            return
+        }
+        let baseURL = "https://raw.githubusercontent.com/tiendatpronhubacho/VipProIPA/main/Patches/"
+        var failures: [String] = []
+        for filename in remotePackageNames {
+            let destination = rootURL.appendingPathComponent(filename)
+            if fm.fileExists(atPath: destination.path),
+               let existing = try? Data(contentsOf: destination),
+               (try? PatchPackageCodec.inspect(existing)) != nil { continue }
+            try? fm.removeItem(at: destination)
+            let allowed = CharacterSet.urlPathAllowed.subtracting(CharacterSet(charactersIn: "/?#"))
+            guard let encoded = filename.addingPercentEncoding(withAllowedCharacters: allowed),
+                  let url = URL(string: baseURL + encoded) else {
+                failures.append("\(filename): URL không hợp lệ")
+                continue
+            }
+            do {
+                var request = URLRequest(url: url)
+                request.timeoutInterval = 25
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                    let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+                    throw NSError(domain: "PatchDownload", code: status,
+                                  userInfo: [NSLocalizedDescriptionKey: "HTTP \(status)"])
                 }
+                _ = try PatchPackageCodec.inspect(data)
+                try data.write(to: destination, options: .atomic)
+                log("patch: downloaded and validated \(filename)")
+            } catch {
+                failures.append("\(filename): \(error.localizedDescription)")
+                log("patch: download/validation failed -- \(filename): \(error)")
             }
         }
+        loadIssues = failures
+    }
+
+    private func updateLoadIssues() {
+        let loaded = Set(items.map { $0.packageURL.lastPathComponent })
+        let absent = remotePackageNames.filter { !loaded.contains($0) }
+        if !absent.isEmpty {
+            let existing = Set(loadIssues)
+            loadIssues.append(contentsOf: absent.filter { name in
+                !existing.contains(where: { $0.hasPrefix(name + ":") })
+            }.map { "\($0): gói không có hoặc không giải mã được" })
+        }
+        loadIssues = Array(Set(loadIssues)).sorted()
     }
 
     func reload() {
+        PatchProjectLibrary.bootstrap()
         items = PatchProjectLibrary.load()
+        updateLoadIssues()
     }
 
     // MARK: - Apply & Restore
