@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+echo "=== Kiểm tra guardrails worse_query ==="
+if [ -x "Tests/run_worse_query_guardrails.sh" ]; then
+    Tests/run_worse_query_guardrails.sh
+else
+    echo "Lỗi: Thiếu Tests/run_worse_query_guardrails.sh"
+    exit 1
+fi
+
 echo "=== Bắt đầu build OGIOS unsigned ==="
 
 # 1. Build app bằng xcodebuild

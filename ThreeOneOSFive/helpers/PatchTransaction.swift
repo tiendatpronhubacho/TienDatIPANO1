@@ -1,5 +1,16 @@
 import Foundation
 
+private enum PatchTransactionError: Error, LocalizedError {
+    case verificationFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .verificationFailed(let path):
+            return "Patch verification failed: the file contents did not match the replacement data at \(path)"
+        }
+    }
+}
+
 struct PatchTransactionReceipt: Codable, Hashable {
     let projectID: UUID
     let appliedAt: Date
@@ -26,24 +37,46 @@ enum PatchTransaction {
             let targetURL = containerURL.appendingPathComponent(rule.relativePath)
             let targetDir = targetURL.deletingLastPathComponent()
 
-            try? FileManager.default.createDirectory(
+            try FileManager.default.createDirectory(
                 at: targetDir,
                 withIntermediateDirectories: true
             )
 
             let backupURL = backupRoot.appendingPathComponent(rule.id.uuidString)
-            try? FileManager.default.createDirectory(
+            try FileManager.default.createDirectory(
                 at: backupURL.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
-            if FileManager.default.fileExists(atPath: targetURL.path) {
+            let targetExisted = FileManager.default.fileExists(atPath: targetURL.path)
+            if targetExisted {
+                // Never proceed with a destructive write if the backup failed.
                 try FileManager.default.copyItem(at: targetURL, to: backupURL)
             }
 
             do {
                 try rule.replacementData.write(to: targetURL, options: .atomic)
+
+                // Confirm the actual target bytes before reporting success.
+                let writtenData = try Data(contentsOf: targetURL, options: .mappedIfSafe)
+                guard writtenData == rule.replacementData else {
+                    throw PatchTransactionError.verificationFailed(targetURL.path)
+                }
             } catch {
-                log("patch: write failed target=\(targetURL.path) error=\(error)")
+                // Best-effort rollback of the current target if writing or
+                // read-back verification fails.
+                do {
+                    if targetExisted, FileManager.default.fileExists(atPath: backupURL.path) {
+                        if FileManager.default.fileExists(atPath: targetURL.path) {
+                            try FileManager.default.removeItem(at: targetURL)
+                        }
+                        try FileManager.default.copyItem(at: backupURL, to: targetURL)
+                    } else if !targetExisted, FileManager.default.fileExists(atPath: targetURL.path) {
+                        try FileManager.default.removeItem(at: targetURL)
+                    }
+                } catch {
+                    log("patch: rollback failed target=\(targetURL.path) error=\(error)")
+                }
+                log("patch: write/verify failed target=\(targetURL.path) error=\(error)")
                 throw error
             }
 
@@ -63,10 +96,9 @@ enum PatchTransaction {
         let receiptURL = backupRoot.appendingPathComponent("\(project.id.uuidString).plist")
         let encoder = PropertyListEncoder()
         encoder.outputFormat = .binary
-        if let data = try? encoder.encode(receipt) {
-            try? data.write(to: receiptURL)
-        }
-        
+        let data = try encoder.encode(receipt)
+        try data.write(to: receiptURL, options: .atomic)
+
         return receipt
     }
 

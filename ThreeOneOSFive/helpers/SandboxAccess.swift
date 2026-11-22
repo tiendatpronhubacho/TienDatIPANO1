@@ -92,8 +92,11 @@ enum SandboxAccess {
     /// Heals an interrupted Caches swap. Called once at launch.
     static func prepare() {
         guard backend == .worseQuery else { return }
-        if !worse_query_recover() {
-            log("sandbox: worse_query recovery skipped or needs attention")
+        if worse_query_recover() {
+            invalidateProbeCache()
+        } else {
+            log("sandbox: worse_query recovery failed even after reset — "
+                + "check the App Group entitlement and access-cache state")
         }
     }
 
@@ -174,9 +177,43 @@ enum SandboxAccess {
         return value
     }
 
+    /// Clears both the Swift probe result and the C container-identity maps.
+    /// Call after repairing Library/Caches so callers do not reuse stale data.
+    static func invalidateProbeCache() {
+        probeCacheLock.lock()
+        probeCache = nil
+        probeCacheLock.unlock()
+        worse_query_invalidate_caches()
+    }
+
+    // The C backend returns -5 only when the App Group Caches swap cannot
+    // start. Throttle repair so a broken entitlement/filesystem cannot cause
+    // repeated resets on every grant attempt.
+    private static let repairLock = NSLock()
+    private static var lastRepairAt: Date = .distantPast
+    private static let repairInterval: TimeInterval = 60
+
+    @discardableResult
+    private static func repairAccessCacheIfNeeded() -> Bool {
+        repairLock.lock()
+        defer { repairLock.unlock() }
+        guard Date().timeIntervalSince(lastRepairAt) >= repairInterval else {
+            return false
+        }
+        lastRepairAt = Date()
+        let repaired = worse_query_reset_access_cache()
+        if repaired {
+            invalidateProbeCache()
+            log("sandbox: worse_query access cache repaired; retrying grant")
+        } else {
+            log("sandbox: worse_query access-cache repair failed")
+        }
+        return repaired
+    }
+
     static func grant(path: String, writable: Bool = false) -> Int64 {
         let clean = path.hasSuffix("/") && path.count > 1 ? String(path.dropLast()) : path
-        let handle: Int64
+        var handle: Int64
         switch backend {
         case .kernel:
             handle = -1
@@ -188,6 +225,13 @@ enum SandboxAccess {
             // writable=true routes through grant_ex so a read-only token can
             // no longer fake a successful grant (spec D-03.3/D-04).
             handle = writable ? worse_query_grant_ex(&pathC, 1) : worse_query_grant(&pathC)
+            // -5 means Library/Caches could not be swapped. The 3106 C layer
+            // distinguishes this from an ordinary query miss; repair once,
+            // then retry the exact same grant one time.
+            if handle == -5, repairAccessCacheIfNeeded() {
+                pathC = clean.utf8CString.map { Int8($0) }
+                handle = writable ? worse_query_grant_ex(&pathC, 1) : worse_query_grant(&pathC)
+            }
         case .unsupported:
             handle = -1
         }
@@ -218,9 +262,7 @@ enum SandboxAccess {
     static func invalidateWorseQueryCache() {
         guard backend == .worseQuery else { return }
         worse_query_forget_all()
-        probeCacheLock.lock()
-        probeCache = nil
-        probeCacheLock.unlock()
+        invalidateProbeCache()
         log("sandbox: worse_query token cache invalidated")
     }
 

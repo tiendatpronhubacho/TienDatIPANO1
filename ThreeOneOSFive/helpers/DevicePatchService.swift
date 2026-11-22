@@ -4,7 +4,7 @@ import UIKit
 enum DevicePatchService {
     static func apply(project: PatchProject) throws -> PatchTransactionReceipt {
         let bundleIDs = orderedBundleIdentifiers(in: project)
-        return try withResolvedContainers(bundleIDs: bundleIDs) { roots in
+        return try withResolvedContainers(bundleIDs: bundleIDs, writable: true) { roots in
             try PatchTransaction.apply(
                 project: project,
                 backupRoot: try PatchProjectLibrary.backupRootURL(),
@@ -20,7 +20,7 @@ enum DevicePatchService {
 
     static func inspectRestore(receipt: PatchTransactionReceipt) throws -> PatchRestoreInspection {
         let bundleIDs = try PatchTransaction.requiredBundleIdentifiers(for: receipt)
-        return try withResolvedContainers(bundleIDs: bundleIDs) { roots in
+        return try withResolvedContainers(bundleIDs: bundleIDs, writable: false) { roots in
             try PatchTransaction.inspectRestore(
                 receipt: receipt,
                 containerResolver: { bundleID in
@@ -38,7 +38,7 @@ enum DevicePatchService {
         allowChangedTargets: Bool = false
     ) throws {
         let bundleIDs = try PatchTransaction.requiredBundleIdentifiers(for: receipt)
-        try withResolvedContainers(bundleIDs: bundleIDs) { roots in
+        try withResolvedContainers(bundleIDs: bundleIDs, writable: true) { roots in
             try PatchTransaction.restore(
                 receipt: receipt,
                 allowChangedTargets: allowChangedTargets,
@@ -57,7 +57,7 @@ enum DevicePatchService {
         project: PatchProject
     ) throws {
         let bundleIDs = try PatchTransaction.requiredBundleIdentifiers(for: receipt)
-        try withResolvedContainers(bundleIDs: bundleIDs) { roots in
+        try withResolvedContainers(bundleIDs: bundleIDs, writable: true) { roots in
             try PatchTransaction.resetToAppliedState(
                 receipt: receipt,
                 fallbackProject: project,
@@ -82,6 +82,7 @@ enum DevicePatchService {
 
     private static func withResolvedContainers<T>(
         bundleIDs: [String],
+        writable: Bool,
         operation: ([String: URL]) throws -> T
     ) throws -> T {
         var roots: [String: URL] = [:]
@@ -96,10 +97,24 @@ enum DevicePatchService {
                 throw PatchPackageError.targetAppUnavailable(bundleID)
             }
             
-            // Xin quyền cho thư mục app (dùng cho cả bad_query và worse_query)
-            let grant = ContainerStore.grantContainerAccess(path)
-            if grant >= 0 { grants.append(grant) }
-            
+            // Kernel backend (iOS 17/18) does not use grant handles.
+            // bad_query / worse_query must return a valid handle before the
+            // transaction is allowed to report success. Writes on worse_query
+            // explicitly require a write-capable token.
+            switch SandboxAccess.backend {
+            case .kernel:
+                break
+            case .badQuery, .worseQuery:
+                let grant = try SandboxAccess.grantOrThrow(path: path, writable: writable)
+                grants.append(grant)
+            case .unsupported:
+                throw GrantFailure.denied(
+                    code: -1,
+                    path: path,
+                    backend: SandboxAccess.backend.displayName
+                )
+            }
+
             roots[bundleID] = PatchPathValidator.canonicalFileURL(URL(fileURLWithPath: path, isDirectory: true))
         }
         return try operation(roots)

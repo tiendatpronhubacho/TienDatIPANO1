@@ -427,3 +427,9 @@ iOS 27 写入失败专项（spec `02-00-ios27-grant-hardening`）：修复 iOS 2
 - Verified iOS 26.0–26.6.1.
 - Verified iOS 27 beta 1–4 builds listed in the app.
 - Unlisted iOS 27 builds remain disabled until explicitly verified.
+
+## 2026-11-22 — Worse Query integration QA upgrade
+
+- Added `Tests/run_worse_query_guardrails.sh` to validate the native write-aware grant API, cache recovery entry points, Swift real-access probe, retry wiring, diagnostics recording, App Groups entitlement, and Xcode source membership.
+- Wired the guardrail suite into `build_esign_ready_ipa.sh`; packaging now stops before Xcode build if the integration contract regresses.
+- No kernel/sandbox-escape payload or exploit primitive was changed. The checks are static and do not prove runtime compatibility on a physical iPhone.

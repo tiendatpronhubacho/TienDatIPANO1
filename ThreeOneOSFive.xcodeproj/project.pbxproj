@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		3105A200 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105A020; };
+		3106Z200 /* worse_query.m in Sources */ = {isa = PBXBuildFile; fileRef = 3106Z100; };
 		EEEE1111FFFF2222AAAA3333 /* WQCombined.m in Sources */ = {isa = PBXBuildFile; fileRef = DDDD1111EEEE2222FFFF3333 /* WQCombined.m */; };
 		3105A201 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105A021; };
 		3105A203 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105A023; };
@@ -83,6 +84,8 @@
 		3105A026 /* SBX.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SBX.swift; sourceTree = "<group>"; };
 		3105A027 /* MG.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MG.swift; sourceTree = "<group>"; };
 		3105A029 /* bad_query.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = bad_query.c; sourceTree = "<group>"; };
+		3106Z100 /* worse_query.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = worse_query.m; sourceTree = "<group>"; };
+		3106Z101 /* worse_query.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = worse_query.h; sourceTree = "<group>"; };
 		3105A030 /* mcm_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = mcm_bridge.m; sourceTree = "<group>"; };
 		3105A031 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		3105A040 /* bad_query.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bad_query.h; sourceTree = "<group>"; };
@@ -211,6 +214,8 @@
 			isa = PBXGroup;
 			children = (
 				3105A029 /* bad_query.c */,
+				3106Z100 /* worse_query.m */,
+				3106Z101 /* worse_query.h */,
 				3105A040 /* bad_query.h */,
 				3105A030 /* mcm_bridge.m */,
 				3105A041 /* mcm_bridge.h */,
@@ -394,6 +399,7 @@ PatchEngine.swift */,
 			AAAA1111BBBB2222CCCC3333 /* PatchEngine.swift in Sources */,
 			EEEE1111FFFF2222AAAA3333 /* WQCombined.m in Sources */,
 				3105A200, 3105A201, 3105A203, 3105A204,
+				3106Z200 /* worse_query.m in Sources */,
 				3105A205, 3105A206, 3105A207, 3105A209,
 				3105A210, 3105A220, 3105A221, 3105A222, 3105A223,
 				3105A224, 3105A225,
