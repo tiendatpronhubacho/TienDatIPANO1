@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import Combine
 
 struct SandboxDiagnosticsView: View {
     @State private var probeRunning = false
@@ -8,7 +7,7 @@ struct SandboxDiagnosticsView: View {
     @State private var copied = false
     @State private var resetRunning = false
     @State private var resetSummary: String?
-    @State private var refreshTick = 0
+    @State private var refreshID = 0
 
     var body: some View {
         List {
@@ -18,7 +17,20 @@ struct SandboxDiagnosticsView: View {
                 LabeledContent("Thiết bị", value: AppInfo.displayMachineName)
                 LabeledContent("Backend", value: SandboxAccess.backend.displayName)
                 LabeledContent("App Group", value: SandboxAccess.appGroup ?? "Không có entitlement")
-                LabeledContent("Probe", value: probeResult.map { $0 ? "OK" : "THẤT BẠI" } ?? "Chưa chạy")
+                if SandboxAccess.backend == .kernel {
+                    LabeledContent(
+                        "Kernel R/W",
+                        value: KernelExploit.kernelRWEstablished.map { $0 ? "ĐÃ THIẾT LẬP" : "CHƯA THIẾT LẬP" } ?? "Chưa chạy"
+                    )
+                    LabeledContent(
+                        "Sandbox Escape",
+                        value: KernelExploit.sandboxEscapeVerified.map { $0 ? "ĐÃ XÁC NHẬN" : "CHƯA XÁC NHẬN" } ?? "Chưa chạy"
+                    )
+                }
+                LabeledContent(
+                    SandboxAccess.backend == .kernel ? "Filesystem Probe" : "Probe",
+                    value: probeResult.map { $0 ? "OK" : "THẤT BẠI" } ?? "Chưa chạy"
+                )
                 Button { runProbe() } label: {
                     if probeRunning { ProgressView("Đang kiểm tra…") }
                     else { Label("Kiểm tra quyền sandbox", systemImage: "stethoscope") }
@@ -33,7 +45,7 @@ struct SandboxDiagnosticsView: View {
             } footer: {
                 Text("Chỉ dùng khi worse_query báo lỗi cache. Thao tác này không xóa dữ liệu ứng dụng.")
             }
-            Section {
+            Section("Lỗi grant gần đây") {
                 if SandboxDiagnostics.recentGrants.isEmpty {
                     Text("Chưa có lần cấp quyền nào được ghi nhận.").foregroundStyle(.secondary)
                 } else {
@@ -51,8 +63,6 @@ struct SandboxDiagnosticsView: View {
                         }
                     }
                 }
-            } header: {
-                Text("Lỗi grant gần đây").accessibilityValue("\(refreshTick)")
             }
             Section {
                 Button {
@@ -64,13 +74,11 @@ struct SandboxDiagnosticsView: View {
                 }
                 Button("Xóa lịch sử lỗi trên màn hình", role: .destructive) {
                     SandboxDiagnostics.reset()
-                    refreshTick += 1
+                    refreshID += 1
                 }
             }
         }
-        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
-            refreshTick &+= 1
-        }
+        .id(refreshID)
         .navigationTitle("Sandbox Diagnostics")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -79,11 +87,15 @@ struct SandboxDiagnosticsView: View {
         probeRunning = true
         DispatchQueue.global(qos: .userInitiated).async {
             let result = SandboxAccess.probe()
-            DispatchQueue.main.async { probeResult = result; probeRunning = false; refreshTick += 1 }
+            DispatchQueue.main.async { probeResult = result; probeRunning = false; refreshID += 1 }
         }
     }
 
     private func runReset() {
+        guard SandboxAccess.backend == .worseQuery else {
+            resetSummary = "Backend hiện tại không sử dụng worse_query Access Cache."
+            return
+        }
         resetRunning = true
         resetSummary = nil
         DispatchQueue.global(qos: .userInitiated).async {
@@ -94,7 +106,7 @@ struct SandboxDiagnosticsView: View {
                 resetSummary = ok ? "Đã reset cache. Probe: \(result ? "OK" : "THẤT BẠI")" : "Reset cache thất bại."
                 probeResult = result
                 resetRunning = false
-                refreshTick += 1
+                refreshID += 1
             }
         }
     }
