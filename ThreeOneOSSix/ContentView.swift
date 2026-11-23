@@ -344,7 +344,25 @@ struct SettingsView: View {
                             Text("Theo hệ thống").frame(maxWidth: .infinity).padding(.vertical, 10)
                         }.font(.subheadline.bold()).foregroundStyle(.white).padding(4).background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.3), lineWidth: 0.5))
                     }
-                    
+                                        VStack(alignment: .leading, spacing: 12) {
+                        Text("CHẨN ĐOÁN SANDBOX").font(.caption).foregroundStyle(.white.opacity(0.5))
+                        Button {
+                            showDiag = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "stethoscope")
+                                Text("Sandbox Diagnostics")
+                                Spacer()
+                                Image(systemName: "chevron.right").opacity(0.5)
+                            }
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding()
+                            .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 16))
+                            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.3), lineWidth: 0.5))
+                        }
+                        .buttonStyle(.plain)
+                    }
                     VStack(alignment: .leading, spacing: 12) {
                         Text("THIẾT BỊ").font(.caption).foregroundStyle(.white.opacity(0.5))
                         VStack(spacing: 0) {
