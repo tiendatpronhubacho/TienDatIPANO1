@@ -52,7 +52,7 @@ class AppState: ObservableObject {
     @Published var unsupportedMessage: String?
 
     /// Same storage key as the `@AppStorage` in `ThreeOneOSSixApp`. AppState
-    /// is a plain class, so it cannot read the struct's property directly —
+    /// is a plain class, so it cannot read the struct's property directly --
     /// it resolves the language from the shared defaults instead.
     private var language: AppLanguage {
         AppLanguage(rawValue: UserDefaults.standard.string(forKey: AppLanguage.storageKey) ?? "")
@@ -125,7 +125,7 @@ class AppState: ObservableObject {
     }
 
     /// True when the app should offer the Unlock screen: a kernel backend that
-    /// has not succeeded yet. Deliberately excludes a settled failure — retrying
+    /// has not succeeded yet. Deliberately excludes a settled failure -- retrying
     /// automatically after a failure would recreate the silent loop this change
     /// removed. The user re-opens Unlock explicitly to try again.
     var needsUnlock: Bool {
@@ -178,10 +178,31 @@ class AppState: ObservableObject {
                     if backend == .worseQuery && !SandboxAccess.hasAppGroup {
                         log("app: worse_query needs an App Group; re-sign with a tool that provides one")
                     } else {
-                        log("app: \(backend.displayName) setup failed — relaunch the app before retrying")
+                        log("app: \(backend.displayName) setup failed -- relaunch the app before retrying")
                     }
                 }
             }
         }
+    }
+}
+
+// MARK: - License
+
+/// Quản lý trạng thái bản quyền.
+/// Stub tối thiểu để build pass; thay logic thật khi cần.
+final class LicenseManager: ObservableObject {
+    @Published var isLicensed: Bool = true
+    @Published var licenseStatus: String = "active"
+    @Published var licenseeName: String? = nil
+    @Published var expiresAt: Date? = nil
+
+    init() {}
+
+    func refresh() {
+        // TODO: gọi backend / đọc keychain
+    }
+
+    func validate() -> Bool {
+        isLicensed
     }
 }
