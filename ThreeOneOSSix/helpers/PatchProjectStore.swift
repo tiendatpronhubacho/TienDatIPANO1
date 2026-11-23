@@ -49,6 +49,35 @@ final class PatchProjectStore: ObservableObject {
         items = PatchProjectLibrary.load()
     }
 
+
+    /// IDs with a durable applied transaction receipt.
+    var activePatchIDs: Set<UUID> {
+        Set(items.compactMap { item in
+            DevicePatchService.latestReceipt(projectID: item.id) == nil ? nil : item.id
+        })
+    }
+
+    func applyPatch(_ item: PatchLibraryItem) {
+        guard let project = item.project, item.canInspectContents else {
+            present(.privatePatchRequiresPassword)
+            return
+        }
+        runOperation(successMessageKey: "patch.applied_message") {
+            _ = try DevicePatchService.apply(project: project)
+        }
+    }
+
+    func restorePatch(_ item: PatchLibraryItem) {
+        guard let project = item.project,
+              let receipt = DevicePatchService.latestReceipt(projectID: item.id) else {
+            present(.invalidProject)
+            return
+        }
+        runOperation(successMessageKey: "patch.restored_message") {
+            try DevicePatchService.restore(receipt: receipt)
+        }
+    }
+
     private func finishInitialLoad(_ loadedItems: [PatchLibraryItem]) {
         items = loadedItems
         isBusy = false

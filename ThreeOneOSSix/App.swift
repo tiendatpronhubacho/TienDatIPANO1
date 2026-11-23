@@ -46,3 +46,142 @@ struct ThreeOneOSSixApp: App {
         }
     }
 }
+
+class AppState: ObservableObject {
+    @Published var exploitStatus: ExploitStatus = .notStarted
+    @Published var unsupportedMessage: String?
+
+    /// Same storage key as the `@AppStorage` in `ThreeOneOSSixApp`. AppState
+    /// is a plain class, so it cannot read the struct's property directly —
+    /// it resolves the language from the shared defaults instead.
+    private var language: AppLanguage {
+        AppLanguage(rawValue: UserDefaults.standard.string(forKey: AppLanguage.storageKey) ?? "")
+            ?? .english
+    }
+    @Published var kernelExploitRunning = false
+
+    var kernelExploitApplicable: Bool {
+        KernelExploit.isApplicable(
+            major: AppInfo.versionTuple.major,
+            minor: AppInfo.versionTuple.minor,
+            patch: AppInfo.versionTuple.patch,
+            build: AppInfo.osBuild,
+            isA10: DeviceCPU.isA10
+        )
+    }
+
+    var isSupported: Bool { unsupportedMessage == nil }
+
+    func detectSupport() {
+        let v = AppInfo.versionTuple
+        let supported = ExploitSupportPolicy.isSupported(
+            major: v.major,
+            minor: v.minor,
+            patch: v.patch,
+            build: AppInfo.osBuild,
+            isA10: DeviceCPU.isA10
+        )
+#if targetEnvironment(simulator)
+        if ProcessInfo.processInfo.arguments.contains("--simulate-access") {
+            exploitStatus = .success(method: "Simulator preview")
+        }
+#endif
+
+        if !supported {
+            // The explanation lives in RejectionReason so onboarding can show
+            // the identical copy without a second hand-maintained copy drifting
+            // the moment a version boundary moves.
+            if let reason = RejectionReason.make(
+                major: v.major,
+                minor: v.minor,
+                patch: v.patch,
+                build: AppInfo.osBuild,
+                osVersion: "iOS \(AppInfo.osVersion) (\(AppInfo.osBuild))",
+                isA10: DeviceCPU.isA10
+            ) {
+                unsupportedMessage = language.text(reason.key, reason.arguments)
+            }
+        }
+        if let unsupportedMessage {
+            exploitStatus = .unsupported(unsupportedMessage)
+            return
+        }
+
+        let applicable = KernelExploit.isApplicable(
+            major: v.major,
+            minor: v.minor,
+            patch: v.patch,
+            build: AppInfo.osBuild,
+            isA10: DeviceCPU.isA10
+        )
+        guard applicable else { return }
+
+        refreshKernelExploitStatus()
+        // Deliberately no auto-run. The kernel chain reboots the device when it
+        // goes wrong, and a process that quietly executes an exploit at launch
+        // gives the user no chance to consent or to read what happened. The
+        // Unlock screen is the only entry point now; `kernelExploitRunning`,
+        // `exploitStatus` and the banner state drive it.
+    }
+
+    /// True when the app should offer the Unlock screen: a kernel backend that
+    /// has not succeeded yet. Deliberately excludes a settled failure — retrying
+    /// automatically after a failure would recreate the silent loop this change
+    /// removed. The user re-opens Unlock explicitly to try again.
+    var needsUnlock: Bool {
+        ExploitSupportPolicy.requiresExplicitUnlock(
+            isKernelBackend: SandboxAccess.backend == .kernel,
+            hasAccess: exploitStatus.isSuccess
+        )
+    }
+
+    private func refreshKernelExploitStatus() {
+        guard !kernelExploitRunning else { return }
+
+        // iOS < 26: kernel R/W success persists (no sandbox probe)
+        // iOS >= 26: verify full sandbox escape is still active
+        if KernelExploit.requiresSandboxEscape {
+            if KernelExploit.hasSandboxAccess() {
+                if !exploitStatus.isSuccess {
+                    exploitStatus = .success(method: SandboxAccess.backend.displayName)
+                    log("app: existing \(SandboxAccess.backend.displayName) access is still active")
+                }
+            } else if exploitStatus.isSuccess {
+                exploitStatus = .notStarted
+                log("app: sandbox access is no longer active")
+            }
+        }
+    }
+
+    func runKernelExploitIfNeeded() {
+        refreshKernelExploitStatus()
+        guard !kernelExploitRunning,
+              !exploitStatus.isSuccess,
+              !exploitStatus.isFailed else { return }
+        kernelExploitRunning = true
+        exploitStatus = .notStarted
+        let backend = SandboxAccess.backend
+        log("app: running \(backend.displayName) access setup on background...")
+        DispatchQueue.global(qos: .userInitiated).async {
+            let ok = KernelExploit.run()
+            DispatchQueue.main.async {
+                self.kernelExploitRunning = false
+                if ok {
+                    self.exploitStatus = .success(method: backend.displayName)
+                    if backend == .kernel {
+                        log("app: kernel access active")
+                    } else {
+                        log("app: \(backend.displayName) access active")
+                    }
+                } else {
+                    self.exploitStatus = .failed(method: backend.displayName, code: -1)
+                    if backend == .worseQuery && !SandboxAccess.hasAppGroup {
+                        log("app: worse_query needs an App Group; re-sign with a tool that provides one")
+                    } else {
+                        log("app: \(backend.displayName) setup failed — relaunch the app before retrying")
+                    }
+                }
+            }
+        }
+    }
+}
