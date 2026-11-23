@@ -314,7 +314,6 @@ struct FeaturesView: View {
 // MARK: - CÀI ĐẶT
 struct SettingsView: View {
     @ObservedObject private var audioManager = AudioManager.shared
-    @State private var showSandboxDiagnostics = false
 
     var body: some View {
         ZStack {
@@ -347,14 +346,6 @@ struct SettingsView: View {
                     }
                     
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("CHẨN ĐOÁN SANDBOX").font(.caption).foregroundStyle(.white.opacity(0.5))
-                        Button { showSandboxDiagnostics = true } label: {
-                            HStack { Image(systemName: "stethoscope").foregroundStyle(.white); Text("Sandbox Diagnostics").foregroundStyle(.white); Spacer(); Image(systemName: "chevron.right").foregroundStyle(.white.opacity(0.6)) }
-                                .padding().background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 16)).overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.3), lineWidth: 0.5))
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 12) {
                         Text("THIẾT BỊ").font(.caption).foregroundStyle(.white.opacity(0.5))
                         VStack(spacing: 0) {
                             HStack { Text("Model phần cứng").foregroundStyle(.white); Spacer(); Text(AppInfo.displayMachineName).foregroundStyle(.white.opacity(0.7)) }.padding()
@@ -365,9 +356,6 @@ struct SettingsView: View {
                     Spacer()
                 }.padding(.horizontal, 20)
             }
-        }
-        .sheet(isPresented: $showSandboxDiagnostics) {
-            NavigationStack { SandboxDiagnosticsView() }.preferredColorScheme(.dark)
         }
     }
 }
