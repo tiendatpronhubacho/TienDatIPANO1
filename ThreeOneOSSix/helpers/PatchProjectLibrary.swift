@@ -49,6 +49,14 @@ enum PatchProjectLibrary {
         try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
         return root
     }
+    /// Chuẩn bị cấu trúc thư mục patch khi app khởi động.
+    /// Gọi trước khi UI đọc `load()` để tránh race ở lần chạy đầu.
+    static func bootstrap(fileManager: FileManager = .default) {
+        _ = try? packageRootURL(fileManager: fileManager)
+        _ = try? backupRootURL(fileManager: fileManager)
+        _ = try? authorCopiesRootURL(fileManager: fileManager)
+        _ = try? originsRootURL(fileManager: fileManager)
+    }
 
     static func backupRootURL(fileManager: FileManager = .default) throws -> URL {
         let root = try packageRootURL(fileManager: fileManager)
