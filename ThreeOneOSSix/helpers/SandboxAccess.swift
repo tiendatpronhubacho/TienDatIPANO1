@@ -26,15 +26,10 @@ enum SandboxBackend: String {
 enum SandboxAccess {
     static var backend: SandboxBackend {
         let v = AppInfo.versionTuple
-        if ExploitSupportPolicy.supportsKernelExploit(
-            major: v.major,
-            minor: v.minor,
-            patch: v.patch,
-            isA10: DeviceCPU.isA10
-        ) {
+        if ExploitSupportPolicy.supportsKernelExploit(major: v.major, minor: v.minor, patch: v.patch) {
             return .kernel
         }
-        if ExploitSupportPolicy.supportsWorseQuery(major: v.major, minor: v.minor, patch: v.patch, build: AppInfo.cachedOSBuild) {
+        if ExploitSupportPolicy.supportsWorseQuery(major: v.major, minor: v.minor, patch: v.patch) {
             return .worseQuery
         }
         if ExploitSupportPolicy.supportsBadQuery(major: v.major, minor: v.minor, patch: v.patch) {
@@ -95,11 +90,8 @@ enum SandboxAccess {
     /// Heals an interrupted Caches swap. Called once at launch.
     static func prepare() {
         guard backend == .worseQuery else { return }
-        if worse_query_recover() {
-            invalidateProbeCache()
-        } else {
-            log("sandbox: worse_query recovery failed even after reset — "
-                + "open Settings → Reset Access Cache")
+        if !worse_query_recover() {
+            log("sandbox: worse_query recovery skipped or needs attention")
         }
     }
 
@@ -122,7 +114,7 @@ enum SandboxAccess {
                   let groupURL = FileManager.default.containerURL(
                     forSecurityApplicationGroupIdentifier: group
                   ) else {
-                log("sandbox: no App Group entitlement — worse_query cannot run")
+                log("sandbox: no App Group entitlement -- worse_query cannot run")
                 return false
             }
             // Exercise the real query path on our own group container first;
@@ -168,40 +160,17 @@ enum SandboxAccess {
         return value
     }
 
-    /// Drops the 30s probe result. Must run after a repair, otherwise probe
-    /// keeps reporting the pre-repair failure and every caller stays blocked.
+    /// Clears the TTL cache without touching the worse_query token cache.
+    /// Used by the diagnostics view after a manual Caches swap reset.
     static func invalidateProbeCache() {
         probeCacheLock.lock()
         probeCache = nil
         probeCacheLock.unlock()
-        worse_query_invalidate_caches()
-    }
-
-    private static let repairLock = NSLock()
-    private static var lastRepairAt: Date = .distantPast
-    private static let repairInterval: TimeInterval = 60
-
-    /// Repairs the App Group's access cache at most once a minute. Returns
-    /// true when it was reset, so the caller can retry the grant immediately.
-    @discardableResult
-    static func repairAccessCacheIfNeeded() -> Bool {
-        repairLock.lock()
-        defer { repairLock.unlock() }
-        guard Date().timeIntervalSince(lastRepairAt) >= repairInterval else { return false }
-        lastRepairAt = Date()
-        let ok = worse_query_reset_access_cache()
-        if ok {
-            invalidateProbeCache()
-            log("sandbox: access cache reset — retrying the grant chain")
-        } else {
-            log("sandbox: access cache reset failed — Settings → Reset Access Cache")
-        }
-        return ok
     }
 
     static func grant(path: String, writable: Bool = false) -> Int64 {
         let clean = path.hasSuffix("/") && path.count > 1 ? String(path.dropLast()) : path
-        var handle: Int64
+        let handle: Int64
         switch backend {
         case .kernel:
             handle = -1
@@ -213,12 +182,6 @@ enum SandboxAccess {
             // writable=true routes through grant_ex so a read-only token can
             // no longer fake a successful grant (spec D-03.3/D-04).
             handle = writable ? worse_query_grant_ex(&pathC, 1) : worse_query_grant(&pathC)
-            // -5 = the App Group's Library/Caches is in a state the swap
-            // cannot start from. Repair once (throttled) and ask again.
-            if handle == -5, repairAccessCacheIfNeeded() {
-                pathC = clean.utf8CString.map { Int8($0) }
-                handle = writable ? worse_query_grant_ex(&pathC, 1) : worse_query_grant(&pathC)
-            }
         case .unsupported:
             handle = -1
         }
@@ -244,7 +207,7 @@ enum SandboxAccess {
     }
 
     /// Drops every cached worse_query token. Used by the retry path when a
-    /// write hits EPERM/EACCES despite a successful grant — a stale token in
+    /// write hits EPERM/EACCES despite a successful grant -- a stale token in
     /// the LRU cache is the usual suspect.
     static func invalidateWorseQueryCache() {
         guard backend == .worseQuery else { return }
@@ -265,8 +228,8 @@ enum SandboxAccess {
     /// - worseQuery (26.7+/27): the full retry chain via GrantRetry.withRetry.
     ///
     /// macOS harness note: on macOS the backend resolves to worseQuery
-    /// (Darwin 27) but grants are meaningless — grant returns -1 and the
-    /// verify_* harnesses rely on that being non-fatal — so the retry chain
+    /// (Darwin 27) but grants are meaningless -- grant returns -1 and the
+    /// verify_* harnesses rely on that being non-fatal -- so the retry chain
     /// is iOS-only.
     static func withGrant<T>(
         directory: String,

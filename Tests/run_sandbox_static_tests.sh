@@ -57,39 +57,11 @@ grep -q 'GrantRetry.isPermissionDenied' "$SRC/helpers/FileManagerService.swift" 
 # T-002: trilingual sandbox.* keys stay present (the alignment test checks
 # parity across languages; this checks presence against accidental removal).
 # 24 keys: 10 error codes + 3 banner + 11 diagnostics view.
-for lang in zh-Hans en vi ko; do
+for lang in zh-Hans en vi; do
   COUNT=$(grep -c '^"sandbox\.' "$SRC/$lang.lproj/Localizable.strings" || true)
-  if [ "$COUNT" -lt 29 ]; then
-    fail "$lang lost sandbox.* keys ($COUNT < 29) (T-002/T-011 regression)"
+  if [ "$COUNT" -lt 24 ]; then
+    fail "$lang lost sandbox.* keys ($COUNT < 24) (T-002 regression)"
   fi
 done
-
-# T-011: the access cache must be able to repair itself. The 3.2.7 port only
-# recovered and then failed closed, so a leftover Caches link disabled every
-# grant forever (tried=[] last=-4).
-grep -q 'static BOOL WQCacheSwapReset' "$SRC/exploit/worse_query.m" \
-  || fail "WQCacheSwapReset missing (T-011 regression)"
-grep -q 'WQCacheLockOpenForRepair' "$SRC/exploit/worse_query.m" \
-  || fail "lock repair missing (T-011 regression)"
-grep -q 'BOOL worse_query_reset_access_cache' "$SRC/exploit/worse_query.m" \
-  || fail "manual reset entry point missing (T-011 regression)"
-grep -q 'return -5' "$SRC/exploit/worse_query.m" \
-  || fail "access-cache-broken code -5 missing (T-011 regression)"
-grep -q 'handle == -5, repairAccessCacheIfNeeded()' "$SRC/helpers/SandboxAccess.swift" \
-  || fail "Swift grant no longer repairs -5 and retries (T-011 regression)"
-grep -q 'invalidateProbeCache' "$SRC/helpers/SandboxAccess.swift" \
-  || fail "probe cache invalidation missing (T-011 regression)"
-
-# T-012: hardware/AI toggles must read CacheData slots, not CacheExtra.
-test -f "$SRC/helpers/MGCacheLayout.swift" || fail "MGCacheLayout.swift missing (T-012 regression)"
-test -f "$SRC/kexploit/MGImageReader.m" || fail "MGImageReader.m missing (T-012 regression)"
-grep -q 'enum GestaltCacheDataBridge' "$SRC/helpers/GestaltPresets.swift" \
-  || fail "CacheData bridge missing (T-012 regression)"
-grep -q 'MGCacheDataCoordinator.shared.resolveValidated' "$SRC/helpers/GestaltPresets.swift" \
-  || fail "preset state no longer resolves CacheData (T-012 regression)"
-grep -q 'MGImageReader.m in Sources' "$ROOT/ThreeOneOSSix.xcodeproj/project.pbxproj" \
-  || fail "MGImageReader.m not in the build (T-012 regression)"
-grep -q 'MGCacheLayout.swift in Sources' "$ROOT/ThreeOneOSSix.xcodeproj/project.pbxproj" \
-  || fail "MGCacheLayout.swift not in the build (T-012 regression)"
 
 echo "PASS: sandbox static guardrails"

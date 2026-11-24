@@ -68,52 +68,18 @@ enum GestaltRegionService {
 
     struct RegionSnapshot: Equatable {
         var country: String
-        /// The value the system actually reads: RegionInfoFromSysconfig when
-        /// present, otherwise the non-cache `regionInfo` fallback.
         var region: String
-        /// Raw RegionInfoFromSysconfig (`yK+xavym…`), nil when absent.
-        var regionFromSysconfig: String?
-        /// Raw non-cache `regionInfo` (`zHeENZu…`). Older tools injected it;
-        /// when both exist this value can be stale and is shown separately.
-        var nonCacheRegionInfo: String?
         var regulatory: String
         var machine: String
-
-        enum UnlockMode: Equatable {
-            case fullUS
-            case codeOnly
-            case other
-        }
-
-        /// Erosion-CN's two modes: full US changes RegionCode + sysconfig +
-        /// regulatory; code-only leaves the sales suffix (e.g. CH/A) alone.
-        var unlockMode: UnlockMode {
-            guard country.uppercased() == "LL" else { return .other }
-            return region == "LL/A" ? .fullUS : .codeOnly
-        }
-
-        /// True when the non-cache key disagrees with the effective value —
-        /// the exact state that made a correct region write look unchanged.
-        var hasStaleNonCacheValue: Bool {
-            guard let nonCacheRegionInfo else { return false }
-            return nonCacheRegionInfo != region
-        }
     }
 
     // MARK: - Snapshot
 
     static func snapshot() throws -> RegionSnapshot {
         let cacheExtra = try readCacheExtra()
-        // Devices carry either the newer `regionInfo` or the legacy key.
-        // Hardcoding the legacy one threw missingRegionFields on every
-        // iOS 27 unit that only has the new key.
         guard
             let country = cacheExtra[GestaltKeys.regionCode] as? String,
-            let region = RegionKeyPolicy.regionValue(
-                in: cacheExtra,
-                regionInfo: GestaltKeys.regionInfo,
-                legacyRegionInfo: GestaltKeys.legacyRegionInfo
-            ),
+            let region = cacheExtra[GestaltKeys.legacyRegionInfo] as? String,
             let regulatory = cacheExtra[GestaltKeys.modelNumber] as? String
         else {
             throw GestaltRegionError.missingRegionFields
@@ -121,67 +87,21 @@ enum GestaltRegionService {
         return RegionSnapshot(
             country: country,
             region: region,
-            regionFromSysconfig: cacheExtra[GestaltKeys.legacyRegionInfo] as? String,
-            nonCacheRegionInfo: cacheExtra[GestaltKeys.regionInfo] as? String,
             regulatory: regulatory,
             machine: gestaltDeviceMachine()
         )
     }
 
-    // MARK: - Region change (any region, no regulatory change)
-
-    /// Switch the sales region only.
-    ///
-    /// Deliberately does NOT touch `modelNumber`: that is the regulatory
-    /// filing, and it belongs to the Siri AI path where it is pinned to a
-    /// verified machine profile. Changing the region a store reports and
-    /// changing where the device says it was type-approved are different
-    /// acts; the first is what this button offers, the second is risk-gated
-    /// elsewhere. Keep the `modelNumber` line absent — do not "fix" it.
-    static func applyRegion(target: RegionTarget) throws {
-        let cacheExtra = try readCacheExtra()
-        guard
-            cacheExtra[GestaltKeys.regionCode] != nil,
-            RegionKeyPolicy.infoKey(
-                in: cacheExtra,
-                regionInfo: GestaltKeys.regionInfo,
-                legacyRegionInfo: GestaltKeys.legacyRegionInfo
-            ) != nil
-        else {
-            throw GestaltRegionError.missingRegionFields
-        }
-
-        try GestaltPlistIO.withExclusiveAccess {
-            var root = try GestaltPlistIO.readRoot()
-            guard var extra = root["CacheExtra"] as? [String: Any] else {
-                throw GestaltRegionError.missingCacheExtra
-            }
-            RegionKeyPolicy.apply(
-                code: target.code,
-                to: &extra,
-                regionCode: GestaltKeys.regionCode,
-                regionInfo: GestaltKeys.regionInfo,
-                legacyRegionInfo: GestaltKeys.legacyRegionInfo
-            )
-            root["CacheExtra"] = extra
-            try GestaltPlistIO.writeRoot(root, reason: "region:\(target.code)")
-        }
-        SoundEffects.play(.confirm)
-    }
+    // MARK: - Region change (LL/A US trial)
 
     /// Change region to US (LL/A) with the regulatory model of the chosen
     /// native model. Writes only keys that already exist.
     static func applyRegion(nativeModel: GestaltSiriModel) throws {
         let cacheExtra = try readCacheExtra()
-        // Require the country code, the regulatory model, and whichever -info
-        // key this device carries.
+        // All three region fields must exist on this device.
         guard
             cacheExtra[GestaltKeys.regionCode] != nil,
-            RegionKeyPolicy.infoKey(
-                in: cacheExtra,
-                regionInfo: GestaltKeys.regionInfo,
-                legacyRegionInfo: GestaltKeys.legacyRegionInfo
-            ) != nil,
+            cacheExtra[GestaltKeys.legacyRegionInfo] != nil,
             cacheExtra[GestaltKeys.modelNumber] != nil
         else {
             throw GestaltRegionError.missingRegionFields
@@ -199,13 +119,8 @@ enum GestaltRegionService {
             guard var extra = root["CacheExtra"] as? [String: Any] else {
                 throw GestaltRegionError.missingCacheExtra
             }
-            RegionKeyPolicy.apply(
-                code: "LL",
-                to: &extra,
-                regionCode: GestaltKeys.regionCode,
-                regionInfo: GestaltKeys.regionInfo,
-                legacyRegionInfo: GestaltKeys.legacyRegionInfo
-            )
+            extra[GestaltKeys.regionCode] = "LL"
+            extra[GestaltKeys.legacyRegionInfo] = "LL/A"
             extra[GestaltKeys.modelNumber] = nativeModel.regulatory
             root["CacheExtra"] = extra
             try GestaltPlistIO.writeRoot(root, reason: "region:LLA:\(nativeModel.id)")
@@ -232,22 +147,13 @@ enum GestaltRegionService {
             }
             guard
                 extra[GestaltKeys.regionCode] != nil,
-                RegionKeyPolicy.infoKey(
-                    in: extra,
-                    regionInfo: GestaltKeys.regionInfo,
-                    legacyRegionInfo: GestaltKeys.legacyRegionInfo
-                ) != nil,
+                extra[GestaltKeys.legacyRegionInfo] != nil,
                 extra[GestaltKeys.modelNumber] != nil
             else {
                 throw GestaltRegionError.missingRegionFields
             }
-            RegionKeyPolicy.apply(
-                code: "LL",
-                to: &extra,
-                regionCode: GestaltKeys.regionCode,
-                regionInfo: GestaltKeys.regionInfo,
-                legacyRegionInfo: GestaltKeys.legacyRegionInfo
-            )
+            extra[GestaltKeys.regionCode] = "LL"
+            extra[GestaltKeys.legacyRegionInfo] = "LL/A"
             extra[GestaltKeys.modelNumber] = nativeModel.regulatory
             if extra[GestaltKeys.aiCapability] != nil {
                 extra[GestaltKeys.aiCapability] = NSNumber(value: true)
@@ -302,11 +208,7 @@ enum GestaltRegionService {
             }
             guard
                 extra[GestaltKeys.regionCode] != nil,
-                RegionKeyPolicy.infoKey(
-                    in: extra,
-                    regionInfo: GestaltKeys.regionInfo,
-                    legacyRegionInfo: GestaltKeys.legacyRegionInfo
-                ) != nil,
+                extra[GestaltKeys.legacyRegionInfo] != nil,
                 extra[GestaltKeys.modelNumber] != nil
             else {
                 throw GestaltRegionError.missingRegionFields
@@ -336,13 +238,8 @@ enum GestaltRegionService {
                 throw GestaltRegionError.factoryBaselineConflict
             }
 
-            RegionKeyPolicy.apply(
-                code: "LL",
-                to: &extra,
-                regionCode: GestaltKeys.regionCode,
-                regionInfo: GestaltKeys.regionInfo,
-                legacyRegionInfo: GestaltKeys.legacyRegionInfo
-            )
+            extra[GestaltKeys.regionCode] = "LL"
+            extra[GestaltKeys.legacyRegionInfo] = "LL/A"
             extra[GestaltKeys.modelNumber] = spoofModel.regulatory
             extra[GestaltKeys.aiCapability] = NSNumber(value: true)
             extra[GestaltKeys.productType] = spoofModel.id

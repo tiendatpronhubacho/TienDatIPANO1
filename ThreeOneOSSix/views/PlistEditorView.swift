@@ -198,8 +198,6 @@ enum PlistEditorError: Error, LocalizedError {
     case invalidPath
     case invalidKey
     case invalidValue
-    case fileTooLarge(Int64)
-    case dateNotRepresentable
 
     var errorDescription: String? {
         switch self {
@@ -207,14 +205,6 @@ enum PlistEditorError: Error, LocalizedError {
         case .invalidPath: return "The plist path is no longer valid."
         case .invalidKey: return "A non-empty key is required."
         case .invalidValue: return "The value could not be converted."
-        case .fileTooLarge(let bytes):
-            let limit = PlistDatePolicy.maximumBytes / (1024 * 1024)
-            let actual = bytes / (1024 * 1024)
-            return "This plist is \(actual) MB; the editor refuses anything over \(limit) MB "
-                + "because a partial parse would truncate the file on save."
-        case .dateNotRepresentable:
-            return "XML plists store dates at whole-second precision. Drop the fraction "
-                + "or switch the file to binary format."
         }
     }
 }
@@ -290,15 +280,7 @@ struct PlistEditorView: View {
         let path = path
         DispatchQueue.global(qos: .userInitiated).async {
             do {
-                let fileURL = URL(fileURLWithPath: path)
-                // Refuse oversized files before parsing: PropertyListSerialization
-                // would read a prefix and the later save would truncate the rest.
-                if PlistDatePolicy.exceedsSizeLimit(fileAt: fileURL) {
-                    let attributes = try? FileManager.default.attributesOfItem(atPath: path)
-                    let size = (attributes?[.size] as? NSNumber)?.int64Value ?? 0
-                    throw PlistEditorError.fileTooLarge(size)
-                }
-                let data = try Data(contentsOf: fileURL)
+                let data = try Data(contentsOf: URL(fileURLWithPath: path))
                 let loaded = try PlistDocument(data: data)
                 DispatchQueue.main.async {
                     document = loaded
@@ -590,14 +572,7 @@ struct PlistValueEditor: View {
             text = data.base64EncodedString()
         } else if let date = initialValue as? Date {
             type = .date
-            // Show fractional seconds when they exist. Formatting them away
-            // would make an unchanged save look lossless while it quietly
-            // rounded the value — the exact silent loss this guards against.
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = PlistDatePolicy.hasFractionalSeconds(date)
-                ? [.withInternetDateTime, .withFractionalSeconds]
-                : [.withInternetDateTime]
-            text = formatter.string(from: date)
+            text = ISO8601DateFormatter().string(from: date)
         }
     }
 
@@ -624,19 +599,10 @@ struct PlistValueEditor: View {
                 }
                 value = data
             case .date:
-                // parseDate round-trips, so partial parses ("...Zjunk") fail
-                // here instead of producing a silently wrong instant.
-                guard let date = GestaltValueParser.parseDate(text) else {
+                guard let date = ISO8601DateFormatter().date(from: text) else {
                     throw PlistEditorError.invalidValue
                 }
-                guard PlistDatePolicy.canRepresentText(text, format: document.format) else {
-                    throw PlistEditorError.dateNotRepresentable
-                }
-                if document.format == .xml {
-                    value = PlistDatePolicy.truncateToWholeSecond(date)
-                } else {
-                    value = date
-                }
+                value = date
             }
             try document.set(value, at: path, step: step)
             onChanged()
